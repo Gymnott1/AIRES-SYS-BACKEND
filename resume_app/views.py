@@ -20,7 +20,7 @@ from django.contrib.auth import update_session_auth_hash
 
 
 # Get your Hugging Face API key from an environment variable
-HF_API_KEY = "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"
+HF_API_KEY = "PUT-YOUR-HUGGINGFACE-API-KEY"
 
 
 class ChatMessagesView(APIView):
