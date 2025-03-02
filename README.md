@@ -131,4 +131,3 @@ GitHub push protection may block pushes if secrets are detected. If you encounte
 This project is licensed under the MIT License.
 ```
 
-Feel free to customize the file to match any project-specific details. This should provide your group members with a clear guide to set up and run the backend locally.
