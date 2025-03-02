@@ -1,0 +1,34 @@
+{
+    "scores": {
+        "skills": 90,
+        "experience": 80,
+        "education": 85,
+        "overall": 85
+    },
+    "key_insights": [
+        "The resume starts with an outdated salutation 'Dear Sir/Madam' and an unprofessional email address 'Linusokello8@gmail.com'",
+        "The resume lacks a clear professional summary or objective statement",
+        "The resume includes irrelevant information such as 'ABOUT ME'",
+        "The resume includes inconsistent formatting and readability",
+        "The resume includes grammatical errors such as 'few years of hands -on expertise' and 'be it working solo or using GitHub in team'",
+        "The resume includes redundant information such as 'Currently in the 3rd year of study showcasing commitment and progress'",
+        "The resume lacks specific accomplishments or achievements in the experience section",
+        "The resume lacks a clear call-to-action or next steps for the hiring manager",
+        "The resume lacks consistent branding and formatting throughout",
+        "The resume lacks a clear focus on specific job titles or industries",
+        "The resume includes irrelevant contact information such as 'Maseno - kombewa Road, Kisumu, 40100, Kenya'"
+    ],
+    "improvement_suggestions": [
+        "Update the salutation to a more professional one such as 'Dear Hiring Manager'",
+        "Include a clear professional summary or objective statement",
+        "Remove irrelevant sections such as 'ABOUT ME'",
+        "Ensure consistent formatting and readability throughout the resume",
+        "Correct grammatical errors and ensure proper use of tenses",
+        "Remove redundant information such as 'Currently in the 3rd year of study showcasing commitment and progress'",
+        "Include specific accomplishments or achievements in the experience section",
+        "Include a clear call-to-action or next steps for the hiring manager",
+        "Ensure consistent branding and formatting throughout the resume",
+        "Focus on specific job titles or industries to increase relevance and customization",
+        "Remove irrelevant contact information such as 'Maseno - kombewa Road, Kisumu, 40100, Kenya'"
+    ]
+}
