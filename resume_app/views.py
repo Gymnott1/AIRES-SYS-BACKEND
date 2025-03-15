@@ -8,7 +8,10 @@ from .models import Resume, ChatMessage
 from .serializers import ResumeSerializer, ChatMessageSerializer
 import PyPDF2
 import requests
-
+import json
+import fitz
+from django.http import JsonResponse
+from django.conf import settings
 # For authentication views:
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
@@ -16,12 +19,90 @@ from rest_framework.authtoken.models import Token
 from django.contrib.auth import update_session_auth_hash
 
 
-
-
-
 # Get your Hugging Face API key from an environment variable
-HF_API_KEY = "PUT-YOUR-HUGGINGFACE-API-KEY"
+#HF_API_KEY = "PUT-YOUR-HUGGINGFACE-API-KEY"
+HF_API_KEY = "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"
 
+class ResumeValidator:
+    def __init__(self):
+        self.api_url = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+        self.headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    
+    def extract_text(self, pdf_file):
+        # Extract text from PDF using PyPDF2
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text() or ""
+        return text  # Add this return statement
+    def is_resume(self, text):
+        # Prepare payload for zero-shot classification
+        payload = {
+            "inputs": text[:1024],  # Limit text length to avoid token limits
+            "parameters": {
+                "candidate_labels": [
+                    "resume", "curriculum vitae", "CV", "job application",
+                    "article", "report", "manual", "academic paper", "letter",
+                    "other"
+                ]
+            }
+        }
+        
+        # Call the Hugging Face API
+        response = requests.post(self.api_url, headers=self.headers, json=payload)
+        result = response.json()
+        print (result)
+        
+        
+        # Check if resume-related labels are ranked highest
+        resume_labels = ["resume", "curriculum vitae", "CV", "job application"]
+        
+        if "labels" in result and "scores" in result:
+            top_label = result["labels"][0] 
+            top_score = result["scores"][0]
+            
+            is_valid = top_label in resume_labels
+            
+            return is_valid, {
+                "is_resume": is_valid,
+                "confidence": top_score,
+                "top_label": top_label,
+                "details": result
+            }
+        
+        return False, {"error": "Classification failed", "details": result}
+
+
+class ValidateResumeView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Make sure it's a PDF
+        if not file.name.lower().endswith('.pdf'):
+            return Response({"error": "File must be a PDF"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        validator = ResumeValidator()
+        
+        try:
+            file.seek(0)
+            text = validator.extract_text(file)
+            is_valid, results = validator.is_resume(text)
+            
+            return Response({
+                'is_resume': is_valid,
+                'confidence': results.get('confidence', 0),
+                'top_label': results.get('top_label', ''),
+                'details': results
+            })
+        except Exception as e:
+            return Response(
+                {"error": "Error validating document", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class ChatMessagesView(APIView):
     # Allow any user to interact; if authenticated, we record their messages.
@@ -113,37 +194,72 @@ class ChatMessagesView(APIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-
 class UploadResumeView(APIView):
     permission_classes = [AllowAny]  # Allow any user to upload
+    
     def post(self, request, format=None):
         file = request.FILES.get('file')
+        validate_only = request.data.get('validate_only', False)
+        
         if not file:
             return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
         
         file.seek(0)
-        resume = Resume(file=file)
-        # If user is authenticated, associate the resume with them.
-        if request.user.is_authenticated:
-            resume.user = request.user
-        resume.save()
-
-        pdf_reader = PyPDF2.PdfReader(file)
+        
+        # Validate the resume first
+        validator = ResumeValidator()
         try:
-            extracted_text = ""
-            for page in pdf_reader.pages:
-                extracted_text += page.extract_text() or ""
-            resume.text = extracted_text
+            file.seek(0)
+            text = validator.extract_text(file)
+            is_valid, results = validator.is_resume(text)
+            
+            # If validation only, return the results without saving
+            if validate_only:
+                return Response({
+                    'is_resume': is_valid,
+                    'confidence': results.get('confidence', 0),
+                    'top_label': results.get('top_label', ''),
+                    'details': results
+                })
+            
+            # If not a resume, return error
+            if not is_valid:
+                return Response({
+                    "error": "The uploaded file doesn't appear to be a resume",
+                    "details": results
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Continue with upload if it's a valid resume
+            resume = Resume(file=file)
+            
+            # If user is authenticated, associate the resume with them
+            if request.user.is_authenticated:
+                resume.user = request.user
             resume.save()
+            
+            # Extract and save text
+            file.seek(0)
+            pdf_reader = PyPDF2.PdfReader(file)
+            try:
+                extracted_text = ""
+                for page in pdf_reader.pages:
+                    extracted_text += page.extract_text() or ""
+                resume.text = extracted_text
+                resume.save()
+            except Exception as e:
+                return Response(
+                    {"error": "Error processing PDF", "details": str(e)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            serializer = ResumeSerializer(resume)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
             return Response(
-                {"error": "Error processing PDF", "details": str(e)},
+                {"error": "Error validating document", "details": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
-        serializer = ResumeSerializer(resume)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
     
 
 class AnalyzeResumeView(APIView):
