@@ -1,5 +1,6 @@
 from django.urls import path
 from .views import ValidateResumeView, UploadResumeView, AnalyzeResumeView, ChatView, SignupView, LoginView, LogoutView, account_detail, update_profile, update_password, delete_account, ChatMessagesView, user_conversations 
+from . import views
 
 urlpatterns = [
     path('api/validate_resume/', ValidateResumeView.as_view(), name='validate-resume'),
@@ -16,6 +17,9 @@ urlpatterns = [
     path('chat-messages/', ChatMessagesView.as_view(), name='chat_messages'),
     path('user-conversations/', user_conversations, name='user_conversations'),
     
+    path('rewrite_resume/', views.rewrite_resume, name='rewrite_resume'),
+    path('revise_resume/', views.revise_resume, name='revise_resume'),
+    path('generate_pdf/', views.generate_pdf, name='generate_pdf'),
 
 
     
