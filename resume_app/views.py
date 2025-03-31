@@ -22,8 +22,8 @@ from django.http import HttpResponse
 from reportlab.lib.pagesizes import letter
 import re
 
-#HF_API_KEY = "PUT-YOUR-HUGGINGFACE-API-KEY"
-HF_API_KEY = "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"
+HF_API_KEY = "PUT-YOUR-HUGGINGFACE-API-KEY"
+
 
 def clean_json_string(json_str):
     # Replace backslash-newline sequences with a newline.
