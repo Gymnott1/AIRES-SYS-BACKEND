@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+import requests
+from .middleware.csp_headers import CSPFrameAllowMiddleware 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,6 +33,29 @@ ALLOWED_HOSTS = []
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
+
+
+
+# --- LLM Configuration ---
+
+# LLM Settings
+USE_LOCAL_LLM = True
+LOCAL_LLM_API_URL = "http://localhost:11434/api/generate"  # Ollama default API endpoint
+LOCAL_LLM_MODEL_NAME = "mistral:latest"  # Default general model
+LOCAL_SENTIMENT_MODEL_NAME = "phi3:latest"  # Model for sentiment analysis tasks
+LOCAL_LLM_TIMEOUT = 1200  # seconds
+
+# Hugging Face Fallback
+HF_API_KEY = "your-huggingface-api-key"  # Set to empty string to disable HF fallback
+HF_API_TIMEOUT = 60  # seconds
+HF_GENERATION_MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+HF_CLASSIFICATION_MODEL_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
+HF_SENTIMENT_MODEL_URL = "https://api-inference.huggingface.co/models/cardiffnlp/twitter-roberta-base-sentiment-latest"
+
+# Add a specific setting for the resume classification task
+LOCAL_CLASSIFICATION_MODEL_NAME = "mistral"  # Using mistral for document classification
+
+# --- End LLM Configuration ---
 
 
 
@@ -56,10 +82,14 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',\
+    'smart_resume_scanner.middleware.csp_headers.CSPFrameAllowMiddleware',  # Custom CSP middleware
 ]
 
 ROOT_URLCONF = 'smart_resume_scanner.urls'
+
+X_FRAME_OPTIONS = 'ALLOWALL'
+
 
 TEMPLATES = [
     {
