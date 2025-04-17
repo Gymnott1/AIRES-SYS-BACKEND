@@ -25,6 +25,8 @@ from .models import Resume
 from mistralai import Mistral, UserMessage, SystemMessage
 from rest_framework.decorators import api_view, permission_classes
 from PyPDF2 import PdfReader, errors as PyPDF2Errors
+import traceback
+
 
 
 
@@ -32,7 +34,322 @@ from PyPDF2 import PdfReader, errors as PyPDF2Errors
 HF_API_KEY = "ENTER_YOUR_HUGGINGFACE_API_KEY_HERE"
 
 
-GITHUB_TOKEN="ETHER_YOUR_GITHUB_TOKEN_HERE"
+GITHUB_TOKEN=""
+
+
+try:
+    from PyPDF2 import PdfReader, errors as PyPDF2Errors
+except ImportError:
+    # Handle case where PyPDF2 might not be installed or has issues
+    PdfReader = None
+    PyPDF2Errors = None
+    print("WARNING: PyPDF2 library not found or failed to import. PDF processing will fail.")
+
+try:
+    from mistralai import Mistral, UserMessage, SystemMessage
+except ImportError:
+    Mistral = None
+    UserMessage = None
+    SystemMessage = None
+    print("WARNING: mistralai library not found. AI analysis will fail.")
+
+from .models import Resume # Assuming you might want to link later # Use environment variable
+MAX_RECRUITER_FILES = 5 # Match frontend setting
+
+class RecruiterAnalyzeView(APIView):
+    permission_classes = [AllowAny] # Adjust as needed
+
+    def extract_text_from_pdf(self, pdf_file_obj):
+        """Extracts text from an InMemoryUploadedFile or similar file object."""
+        if PdfReader is None:
+             raise ImportError("PyPDF2 library is required for PDF processing.")
+
+        text = ""
+        try:
+            pdf_file_obj.seek(0)
+            pdf_reader = PdfReader(pdf_file_obj)
+            if not pdf_reader.pages:
+                 print(f"Warning: PDF file {getattr(pdf_file_obj, 'name', 'N/A')} has no pages or is unreadable.")
+                 return None # Indicate failure
+
+            for page in pdf_reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+
+            if not text.strip():
+                 print(f"Warning: Could not extract any text from PDF {getattr(pdf_file_obj, 'name', 'N/A')}.")
+                 return None # Indicate failure
+
+            return text
+        except PyPDF2Errors.PdfReadError as pdf_err:
+            print(f"Error reading PDF {getattr(pdf_file_obj, 'name', 'N/A')}: {pdf_err}")
+            if "encrypted" in str(pdf_err).lower():
+                raise ValueError(f"File '{getattr(pdf_file_obj, 'name', 'N/A')}' is encrypted and cannot be processed.")
+            else:
+                raise ValueError(f"File '{getattr(pdf_file_obj, 'name', 'N/A')}' is corrupted or not a valid PDF.")
+        except Exception as e:
+            print(f"Unexpected error extracting text from {getattr(pdf_file_obj, 'name', 'N/A')}: {e}")
+            traceback.print_exc()
+            raise ValueError(f"Failed to process file '{getattr(pdf_file_obj, 'name', 'N/A')}'.")
+
+    def clean_ai_json_response(self, raw_text):
+        """Attempts to extract a valid JSON object from the AI's raw text output."""
+        cleaned = re.sub(r'```json\s*', '', raw_text, flags=re.IGNORECASE)
+        cleaned = re.sub(r'```', '', cleaned)
+        cleaned = cleaned.strip()
+
+        first_brace = cleaned.find('{')
+        last_brace = cleaned.rfind('}')
+
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            json_str = cleaned[first_brace : last_brace + 1]
+            try:
+                # Attempt to parse the extracted string
+                # Replace escaped newlines potentially missed by AI
+                json_str_corrected = json_str.replace('\\n', '\n')
+                # Try parsing with strict=False first if needed, but aim for valid JSON
+                parsed_json = json.loads(json_str_corrected)
+                return parsed_json
+            except json.JSONDecodeError as e:
+                print(f"JSON Decode Error after extraction: {e}")
+                print(f"Problematic JSON string segment (first 500 chars):\n {json_str[:500]}...")
+                # Try to fix common issues like trailing commas (requires more advanced parsing)
+                # For now, return None to indicate failure
+                return None
+        else:
+            print("Could not find valid start/end braces for JSON object.")
+            return None
+
+    def post(self, request, format=None):
+        if Mistral is None:
+             return Response({'error': 'AI analysis service is not configured correctly on the server.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        job_description = request.data.get('job_description')
+        resume_files = request.FILES.getlist('resumes')
+
+        # --- Validation ---
+        if not job_description or not job_description.strip():
+            return Response({'error': 'Job description is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not resume_files:
+            return Response({'error': 'At least one resume file (PDF) is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        # --- Use MAX_RECRUITER_FILES ---
+        if len(resume_files) > MAX_RECRUITER_FILES:
+            return Response({'error': f'A maximum of {MAX_RECRUITER_FILES} resume files can be uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- Process Resumes ---
+        extracted_texts = []
+        file_identifiers = []
+        processing_errors = [] # Collect non-fatal errors
+        for index, file_obj in enumerate(resume_files):
+            if not file_obj.name.lower().endswith('.pdf'):
+                 processing_errors.append(f"File '{file_obj.name}' is not a PDF and was skipped.")
+                 continue # Skip non-PDF files
+            try:
+                text = self.extract_text_from_pdf(file_obj)
+                if text is None:
+                    processing_errors.append(f"Could not extract text from '{file_obj.name}' (might be image-based or corrupted); it was skipped.")
+                    continue # Skip files where text extraction failed
+                extracted_texts.append(text)
+                file_identifiers.append(file_obj.name)
+            except ValueError as extraction_error:
+                # Catch critical errors raised from extract_text_from_pdf
+                return Response({'error': str(extraction_error)}, status=status.HTTP_400_BAD_REQUEST)
+            except ImportError as import_err:
+                 # Raised if PyPDF2 wasn't loaded
+                 return Response({'error': 'PDF processing library is unavailable on the server.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                 print(f"Unexpected error processing file {file_obj.name}: {e}")
+                 traceback.print_exc()
+                 return Response({'error': f"An unexpected server error occurred while processing '{file_obj.name}'."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Check if any resumes were successfully processed
+        if not extracted_texts:
+             error_detail = " ".join(processing_errors) if processing_errors else "No valid PDF resumes were found or could be processed."
+             return Response({'error': 'No resumes could be processed.', 'details': error_detail}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- Construct ENHANCED AI Prompt ---
+        resume_sections = ""
+        for i, text in enumerate(extracted_texts):
+            # Use the stored identifier corresponding to the successfully extracted text
+            resume_sections += f"--- Resume {i+1} (Identifier: {file_identifiers[i]}) ---\n"
+            resume_sections += f"{text}\n\n" # Added double newline for clarity
+
+        # *** THIS IS THE UPDATED PROMPT SECTION ***
+        prompt = f"""
+You are an expert AI hiring assistant performing a detailed comparison of multiple candidate resumes against a specific job description.
+
+Job Description:
+---
+{job_description}
+---
+
+Resumes:
+{resume_sections}---
+
+Task:
+Analyze each resume thoroughly against the job description and provide a structured JSON response.
+
+Instructions:
+1.  **Overall Evaluation:** For EACH resume, provide an overall `match_score` (integer 0-100) representing alignment with the **entire** job description.
+2.  **Categorical Scores:** For EACH resume, provide specific scores (integer 0-100) for:
+    *   `skills_score`: How well the candidate's skills match the required/desired skills.
+    *   `experience_score`: Relevance and depth of work experience compared to job requirements.
+    *   `education_score`: Alignment of educational background with job requirements.
+    *   `keyword_score`: Presence and relevance of keywords from the job description within the resume.
+3.  **Keyword Analysis:** For EACH resume:
+    *   Identify and list the top 5-10 most important `keywords_matched` from the job description found in the resume.
+    *   Identify and list the top 5-10 most important `keywords_missing` from the job description *not* found in the resume.
+4.  **Strengths & Weaknesses:** For EACH resume, provide concise lists (3-5 bullet points each) *relative to this specific job description*:
+    *   `strengths`: Key qualifications, experiences, or skills that make the candidate a good fit.
+    *   `weaknesses`: Areas where the candidate falls short of the job requirements or potential gaps.
+5.  **Red Flags:** For EACH resume, list any potential `red_flags` (0-3 bullet points). Examples: unexplained employment gaps, frequent short-term jobs, lack of specific core requirements, poor formatting impacting readability. If none, provide an empty list [].
+6.  **Recommendation Tier:** For EACH resume, assign a `recommendation_tier` from the following options: "Top Match", "Strong Candidate", "Potential Fit", "Less Suitable". Base this on the overall analysis.
+7.  **AI Summaries:**
+    *   Provide a brief `job_description_summary` (1-2 sentences) capturing the essence of the role.
+    *   Provide a concise `summary` (2-3 sentences) for EACH candidate, highlighting their overall suitability *for this role*.
+8.  **Comparative Analysis:** Provide a `comparative_analysis` section (1-2 paragraphs) comparing the candidates head-to-head *for this specific role*, highlighting key differentiators and trade-offs.
+9.  **Ranking:** Provide a `ranking` list containing the exact `resume_identifier` strings (provided in the input) ordered from most suitable to least suitable based on your comprehensive analysis.
+10. **Output Format:** Respond ONLY with a single, valid JSON object adhering strictly to the structure below. Ensure all strings are properly escaped. Do not include any text, explanations, or markdown code fences outside the JSON object.
+
+Expected JSON Structure:
+{{
+  "job_description_summary": "string",
+  "comparative_analysis": "string",
+  "ranking": [
+    "string (resume_identifier 1)",
+    "string (resume_identifier 2)",
+    // ... include all provided identifiers in order
+  ],
+  "candidate_analysis": [
+    {{
+      "resume_identifier": "{file_identifiers[0]}", // Use the actual identifier
+      "match_score": integer (0-100),
+      "recommendation_tier": "string ('Top Match' | 'Strong Candidate' | 'Potential Fit' | 'Less Suitable')",
+      "summary": "string (2-3 sentences summary vs JD)",
+      "details": {{
+        "skills_score": integer (0-100),
+        "experience_score": integer (0-100),
+        "education_score": integer (0-100),
+        "keyword_score": integer (0-100),
+        "keywords_matched": ["string", "string", ...],
+        "keywords_missing": ["string", "string", ...],
+        "strengths": ["string (bullet point)", "string", ...],
+        "weaknesses": ["string (bullet point)", "string", ...],
+        "red_flags": ["string (bullet point)", "string", ...] // Empty list [] if none
+      }}
+    }}
+    // Repeat this structure for each processed resume, using its correct identifier
+    // e.g., {{ "resume_identifier": "{file_identifiers[1]}", ... }}
+  ]
+}}
+
+Your JSON Response:
+"""
+        # *** END OF UPDATED PROMPT SECTION ***
+
+
+        # --- Call AI Service ---
+        token = GITHUB_TOKEN # Ensure this is correctly loaded
+        endpoint = "https://models.inference.ai.azure.com" # Verify endpoint
+        model_name = "mistral-small-2503" # Or your preferred model
+
+        if not token or token == "YOUR_MISTRAL_API_KEY_FALLBACK":
+             print("ERROR: GITHUB_TOKEN (Mistral API Key) is not set correctly.")
+             # Avoid exposing key details in the error response
+             return Response({'error': 'AI service configuration error on the server.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        client = Mistral(api_key=token, server_url=endpoint)
+        analysis_json = None
+
+        try:
+            print(f"DEBUG: Sending request to AI for recruiter analysis ({len(extracted_texts)} resumes)...")
+            response = client.chat.complete(
+                model=model_name,
+                messages=[
+                    SystemMessage(content="You are an expert AI hiring assistant comparing resumes to job descriptions accurately and objectively."),
+                    UserMessage(content=prompt),
+                ],
+                temperature=0.4, # Slightly lower for more consistent structured output
+                max_tokens=4000, # Increased slightly due to more detailed output per candidate
+                top_p=1.0
+                # Consider adding response_format={"type": "json_object"} if using newer models/APIs that support it
+            )
+            print("DEBUG: Received AI response.")
+
+            raw_ai_text = response.choices[0].message.content
+            # Log less in production maybe, or only on error
+            # print(f"DEBUG: Raw AI response text:\n---\n{raw_ai_text[:1000]}...\n---")
+
+            analysis_json = self.clean_ai_json_response(raw_ai_text)
+
+            if analysis_json is None:
+                print("ERROR: Failed to parse JSON from AI response after cleaning.")
+                # Provide a more helpful error message if parsing failed
+                return Response({
+                    'error': 'The AI response could not be processed into the expected format.',
+                    'details': 'The analysis service returned data that was not valid JSON. Please try again. If the problem persists, contact support.'
+                    # Optionally include a non-sensitive part of the raw response for debugging if safe
+                    # 'raw_snippet': raw_ai_text[:200] + '...'
+                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # --- ENHANCED Validation of Parsed JSON ---
+            required_top_level = ['job_description_summary', 'comparative_analysis', 'ranking', 'candidate_analysis']
+            if not all(key in analysis_json for key in required_top_level):
+                 missing_keys = [key for key in required_top_level if key not in analysis_json]
+                 print(f"ERROR: Parsed JSON missing top-level keys: {missing_keys}")
+                 return Response({'error': f'AI analysis is incomplete. Missing top-level sections: {", ".join(missing_keys)}.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            if not isinstance(analysis_json.get('candidate_analysis'), list) or not analysis_json['candidate_analysis']:
+                 print("ERROR: 'candidate_analysis' is not a list or is empty.")
+                 return Response({'error': 'AI analysis is incomplete. No candidate analysis data found.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Validate the structure of the first candidate's analysis as a sample
+            first_candidate = analysis_json['candidate_analysis'][0]
+            required_candidate_keys = ['resume_identifier', 'match_score', 'recommendation_tier', 'summary', 'details']
+            if not all(key in first_candidate for key in required_candidate_keys):
+                 missing_keys = [key for key in required_candidate_keys if key not in first_candidate]
+                 print(f"ERROR: Parsed JSON missing required candidate keys: {missing_keys}")
+                 return Response({'error': f'AI analysis is incomplete. Missing candidate details: {", ".join(missing_keys)}.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            required_details_keys = ['skills_score', 'experience_score', 'education_score', 'keyword_score', 'keywords_matched', 'keywords_missing', 'strengths', 'weaknesses', 'red_flags']
+            if not isinstance(first_candidate.get('details'), dict) or not all(key in first_candidate['details'] for key in required_details_keys):
+                 missing_keys = [key for key in required_details_keys if not isinstance(first_candidate.get('details'), dict) or key not in first_candidate['details']]
+                 print(f"ERROR: Parsed JSON missing required candidate 'details' keys: {missing_keys}")
+                 return Response({'error': f'AI analysis is incomplete. Missing granular candidate details: {", ".join(missing_keys)}.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Basic type checks (optional but good practice)
+            if not isinstance(first_candidate['match_score'], int) or not isinstance(first_candidate['details']['skills_score'], int):
+                 print("ERROR: Score fields are not integers.")
+                 # return Response({'error': 'AI analysis format error: Scores must be integers.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                 # Be lenient for now, frontend might handle string scores if needed
+                 pass
+            if not isinstance(first_candidate['details']['keywords_matched'], list) or not isinstance(first_candidate['details']['strengths'], list):
+                 print("ERROR: Keyword/Strength/Weakness/RedFlag fields are not lists.")
+                 return Response({'error': 'AI analysis format error: Expected lists for keywords, strengths, etc.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            print("DEBUG: Successfully parsed and validated AI analysis JSON structure.")
+
+            # --- Include Processing Errors in Response (Optional) ---
+            if processing_errors:
+                analysis_json['processing_warnings'] = processing_errors
+
+            return Response(analysis_json, status=status.HTTP_200_OK)
+
+        except requests.exceptions.RequestException as api_error:
+            print(f"Error calling AI API: {api_error}")
+            # Log more details for server logs, less for client
+            error_details_for_log = f"Status: {getattr(api_error.response, 'status_code', 'N/A')}, Body: {getattr(api_error.response, 'text', 'N/A')[:500]}..." if hasattr(api_error, 'response') and api_error.response is not None else str(api_error)
+            print(f"AI API Request Error Details: {error_details_for_log}")
+            return Response({'error': 'Could not connect to the AI analysis service. Please try again later.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as e:
+            # Catch-all for other unexpected errors during AI call or processing
+            print(f"Unexpected error during AI processing or response handling: {e}")
+            traceback.print_exc()
+            return Response({'error': 'An unexpected error occurred during analysis.', 'details': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 
 # @method_decorator(xframe_options_exempt, name='dispatch')
 class ResumePDFView(APIView):
