@@ -420,24 +420,61 @@ def clean_json_string(json_str):
     cleaned = re.sub(r'[\x00-\x1F\x7F]', '', cleaned)
     return cleaned
 
+import PyPDF2 # Keep PyPDF2 for text extraction
+import re     # Keep re for regex checks
+# Removed requests import as it was only for HF
+# Removed HF_API_KEY variable
+
 class ResumeValidator:
-    def __init__(self):
-        self.api_url = "https://api-inference.huggingface.co/models/facebook/bart-large-mnli"
-        self.headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    
+    # Removed __init__ method as HF API details are no longer needed
+
     def extract_text(self, pdf_file):
-        
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() or ""
-        return text
-    
+        """Extracts text from a PDF file object."""
+        # Ensure PyPDF2 is available
+        if not hasattr(PyPDF2, 'PdfReader'):
+             raise ImportError("PyPDF2 library is required but seems unavailable.")
+
+        try:
+            # pdf_file might be an InMemoryUploadedFile, needs seek(0)
+            if hasattr(pdf_file, 'seek'):
+                pdf_file.seek(0)
+
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            if not pdf_reader.pages:
+                print(f"Warning: PDF file {getattr(pdf_file, 'name', 'N/A')} has no pages.")
+                return "" # Return empty string if no pages
+
+            for page in pdf_reader.pages:
+                # Attempt to extract text, provide empty string if None
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+            return text
+        except PyPDF2.errors.PdfReadError as e:
+             print(f"Error reading PDF {getattr(pdf_file, 'name', 'N/A')}: {e}")
+             # Re-raise as a more general error or return specific error indication
+             raise ValueError(f"Could not read PDF file: {e}")
+        except Exception as e:
+             print(f"Unexpected error during PDF text extraction: {e}")
+             # Handle other potential errors during extraction
+             raise
+
     def is_resume_local(self, text):
         """Use a simple keyword-based approach to determine if text is likely a resume"""
-        
+        if not text: # Handle empty text case
+            return False, {
+                "is_resume": False,
+                "confidence": 0.0,
+                "indicators_found": 0,
+                "personal_info_found": 0,
+                "top_label": "other",
+                "service_used": "local_keyword_analysis",
+                "error": "Input text was empty"
+            }
+
         text_lower = text.lower()
-        
+
         resume_indicators = [
             "work experience", "employment history", "professional experience",
             "education", "skills", "certifications", "references",
@@ -445,84 +482,51 @@ class ResumeValidator:
             "technical skills", "work history", "job history",
             "achievements", "accomplishments", "projects",
             "languages", "proficient in", "expertise in"
+            # Add more specific keywords if needed
         ]
-        
-        
+
         indicator_count = sum(1 for indicator in resume_indicators if indicator in text_lower)
-        
-        has_email = bool(re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text))
-        has_phone = bool(re.search(r'\b(\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b', text))
-        has_linkedin = "linkedin.com" in text_lower
-        
+
+        # Regex patterns for contact info
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        phone_pattern = r'\b(\+\d{1,2}\s?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b'
+
+        has_email = bool(re.search(email_pattern, text))
+        has_phone = bool(re.search(phone_pattern, text))
+        has_linkedin = "linkedin.com/" in text_lower # More specific check
+
         personal_info_count = sum([has_email, has_phone, has_linkedin])
-        
-        max_possible_indicators = len(resume_indicators) + 3  
-        confidence = min(1.0, (indicator_count + personal_info_count) / (max_possible_indicators * 0.5))
-        
-        is_valid = confidence > 0.3
-        
+
+        # Adjust confidence calculation if necessary
+        # Consider weighting indicators vs personal info differently
+        # Base confidence on number of sections found + contact info
+        max_possible_score = len(resume_indicators) + 3 # Approximate max indicators
+        raw_score = indicator_count + personal_info_count
+
+        # Normalize confidence (example scaling, adjust as needed)
+        # Divide by a reasonable expected number of indicators for a resume
+        confidence = min(1.0, raw_score / (max_possible_score * 0.5))
+
+        # Adjust threshold based on testing
+        is_valid_threshold = 0.3
+        is_valid = confidence >= is_valid_threshold
+
         return is_valid, {
             "is_resume": is_valid,
-            "confidence": confidence,
+            "confidence": round(confidence, 3), # Round confidence for cleaner output
             "indicators_found": indicator_count,
             "personal_info_found": personal_info_count,
             "top_label": "resume" if is_valid else "other",
             "service_used": "local_keyword_analysis"
         }
 
-    def is_resume_hf(self, text):
-        """Use Hugging Face's API to determine if the text is a resume"""
-        try:
-            
-            payload = {
-                "inputs": text[:1024],  
-                "parameters": {
-                    "candidate_labels": [
-                        "resume", "curriculum vitae", "CV", "job application",
-                        "article", "report", "manual", "academic paper", "letter",
-                        "other"
-                    ]
-                }
-            }
-           
-            response = requests.post(self.api_url, headers=self.headers, json=payload)
-            result = response.json()
-            print(result)
-            
-            resume_labels = ["resume", "curriculum vitae", "CV", "job application", "academic paper"]
-            
-            if "labels" in result and "scores" in result:
-                top_label = result["labels"][0]
-                top_score = result["scores"][0]
-                
-                is_valid = top_label in resume_labels
-                
-                return is_valid, {
-                    "is_resume": is_valid,
-                    "confidence": top_score,
-                    "top_label": top_label,
-                    "details": result,
-                    "service_used": "huggingface"
-                }
-            
-            raise Exception("Unexpected API response format")
-            
-        except Exception as e:
-            print(f"Hugging Face API error: {str(e)}")
-            return None, {"error": f"Classification failed: {str(e)}", "details": str(e)}
-    
-    def is_resume(self, text):
-        """Try Hugging Face first, fall back to local method if it fails"""
-        
-        hf_result, hf_details = self.is_resume_hf(text)
-        
-        if hf_result is not None:  
-            return hf_result, hf_details
-        
-        
-        print("Falling back to local keyword analysis for classification")
-        return self.is_resume_local(text)
+    # Removed is_resume_hf method
 
+    def is_resume(self, text):
+        """Determine if text is likely a resume using local keyword analysis."""
+        # Directly call the local method as HF fallback is removed
+        print("Using local keyword analysis for classification.")
+        return self.is_resume_local(text)
 
 class ValidateResumeView(APIView):
     permission_classes = [AllowAny]
