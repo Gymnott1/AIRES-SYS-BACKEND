@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ValidateResumeView, RecruiterAnalyzeView, ResumePDFView, ResumeDetailView, UploadResumeView, AnalyzeResumeView, ChatView, SignupView, LoginView, LogoutView, account_detail, update_profile, update_password, delete_account, ChatMessagesView, user_conversations 
+from .views import ValidateResumeView, UpdateUserRoleView, RecruiterAnalyzeView, ResumePDFView, ResumeDetailView, UploadResumeView, AnalyzeResumeView, ChatView, SignupView, LoginView, LogoutView, account_detail, update_profile, update_password, delete_account, ChatMessagesView, user_conversations 
 from . import views
 
 urlpatterns = [
@@ -23,6 +23,7 @@ urlpatterns = [
     path('resume/<int:pk>/', ResumeDetailView.as_view(), name='resume-detail'),
     path('resume/<int:pk>/pdf/', ResumePDFView.as_view(), name='resume-pdf'),
     path('recruiter_analyze/', RecruiterAnalyzeView.as_view(), name='recruiter_analyze'),
+    path('account/role/', UpdateUserRoleView.as_view(), name='update_account_role'),
 
 
     
