@@ -1,11 +1,8 @@
-# resume_app/models.py
-
 import os
 from django.db import models
-from django.contrib.auth.models import User, Group # Import Group if needed elsewhere
+from django.contrib.auth.models import User, Group 
 from django.utils import timezone
 
-# --- Constants defined at module level ---
 USER_ROLE_CHOICES = [
     ('jobseeker', 'Job Seeker'),
     ('recruiter', 'Recruiter'),
@@ -42,10 +39,6 @@ CANDIDATE_RESUME_STATUS_CHOICES = [
     ('analyzed', 'Analyzed'),
     ('error', 'Error'),
 ]
-# --- End Constants ---
-
-
-# --- Core Models ---
 
 class Resume(models.Model):
     """
@@ -502,15 +495,5 @@ class CandidateResume(models.Model):
         return f"Candidate Resume '{self.resume_identifier}' for Analysis {self.recruiter_analysis.id}"
 
     def save(self, *args, **kwargs):
-        # Optional: Add logic here to extract text if file exists and text is empty
-        # You might want to use a signal (post_save) for cleaner separation
-        # Example:
-        # if self.file and not self.extracted_text:
-        #     try:
-        #         # Replace with your actual text extraction function
-        #         from .utils import extract_text_from_pdf_utility
-        #         self.extracted_text = extract_text_from_pdf_utility(self.file)
-        #     except Exception as e:
-        #         print(f"Error auto-extracting text for CandidateResume {self.id}: {e}")
-        #         self.status = 'error' # Mark as error if extraction fails
+        
         super().save(*args, **kwargs)

@@ -5,6 +5,8 @@ Below is a sample **README.md** file for your Django backend. You can add this f
 
 ## Overview
 
+
+
 This repository contains the Django backend for the AI Resume Scanner project. The backend handles API endpoints for resume analysis and chat functionality. It connects to a PostgreSQL database and is built with Django.
 
 ## Prerequisites
@@ -24,6 +26,29 @@ Open your terminal and run:
 git clone https://github.com/Gymnott1/AIRES-SYS-BACKEND.git
 cd AIRES-SYS-BACKEND
 ```
+
+## Some images 
+![AIRES-SYS](images/be1.png)
+
+![AIRES-SYS](images/be2.png)
+
+![AIRES-SYS](images/be3.png)
+
+![AIRES-SYS](images/be4.png)
+
+![AIRES-SYS](images/be5.png)
+
+![AIRES-SYS](images/be6.png)
+
+![AIRES-SYS](images/be7.png)
+
+![AIRES-SYS](images/be8.png)
+
+![AIRES-SYS](images/be9.png)
+
+![AIRES-SYS](images/be10.png)
+
+![AIRES-SYS](images/be11.png)
 
 ### 2. Create and Activate a Virtual Environment
 

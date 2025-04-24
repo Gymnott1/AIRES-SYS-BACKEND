@@ -1,3 +1,5 @@
+```
+prompt = f"""
 Analyze the following resume and return ONLY valid JSON (with no additional text or formatting) that exactly follows the structure below. Evaluate the resume and assign percentage scores (0–100) for each area 
 scores (skills, experience, education, overall) as percentages, and. Also, provide exactly 10 key insights and exactly 10 actionable improvement suggestions. The key insights and improvement suggestions must cover the following areas:
 - Formatting & Readability
@@ -24,7 +26,7 @@ The expected JSON structure is:
    
   
 Resume: {resume.text}
-
+"""
 
 prompt = f"""
         Analyze the following resume and return ONLY valid JSON (with no additional text or formatting) that exactly follows the structure below. Evaluate the resume and assign percentage scores (0–100) for each area 
@@ -51,10 +53,10 @@ prompt = f"""
         -   
             Resume: {resume.text} 
               """
+```
 
-
-
-
+```
+prompt = f"""
 You are an expert ATS resume writer and formatter. Your task is to rewrite the provided raw resume text to be highly impactful, professional, ATS-optimized, and structured precisely in Markdown format.
 
 **Core Instructions:**
@@ -117,3 +119,5 @@ You are an expert ATS resume writer and formatter. Your task is to rewrite the p
 
 
 **Your Response (JSON Object Only):**
+"""
+```

@@ -2,6 +2,7 @@ from django.contrib import admin
 from .models import (
     Resume,
     Analysis,
+    ChatMessage,
     Conversation,
     Message,
     UpgradedResume,
@@ -10,16 +11,12 @@ from .models import (
     CandidateResume
 )
 
-# --- Basic Registrations (Minimal Customization) ---
-
-# You can create more detailed ModelAdmin classes for better display and filtering
-
 @admin.register(Resume)
 class ResumeAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'title', 'upload_date', 'is_active', 'file')
     list_filter = ('is_active', 'upload_date', 'user')
     search_fields = ('title', 'user__username', 'file')
-    readonly_fields = ('upload_date',) # Typically don't want users editing upload date
+    readonly_fields = ('upload_date',)
 
 @admin.register(Analysis)
 class AnalysisAdmin(admin.ModelAdmin):
@@ -28,12 +25,19 @@ class AnalysisAdmin(admin.ModelAdmin):
     search_fields = ('resume__id', 'resume__user__username')
     readonly_fields = ('analysis_date',)
 
+@admin.register(ChatMessage)
+class ChatMessageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'resume', 'user', 'sender', 'created_at')
+    list_filter = ('sender', 'created_at', 'user')
+    search_fields = ('message', 'user__username', 'resume__id')
+    readonly_fields = ('created_at',)
+
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
     list_display = ('id', 'user', 'resume', 'analysis', 'start_date', 'status')
     list_filter = ('status', 'start_date', 'user')
     search_fields = ('title', 'user__username', 'resume__id', 'analysis__id')
-    readonly_fields = ('start_date', 'end_date') # end_date might be set programmatically
+    readonly_fields = ('start_date', 'end_date')
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
