@@ -37,7 +37,7 @@ import traceback
 HF_API_KEY = "ENTER_YOUR_HUGGINGFACE_API_KEY_HERE"
 
 
-GITHUB_TOKEN="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"
+GITHUB_TOKEN="git-api"
 
 
 try:
@@ -99,7 +99,7 @@ from .models import RecruiterAnalysis, CandidateResume # Import required models
 
 # --- Constants ---
 # Load API key securely from environment variable is best practice
-GITHUB_TOKEN = os.getenv("MISTRAL_API_KEY", "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") # Replace fallback in production
+GITHUB_TOKEN = os.getenv("MISTRAL_API_KEY", "git-api") # Replace fallback in production
 MAX_RECRUITER_FILES = 5 # Should match frontend setting
 
 # --- Full RecruiterAnalyzeView Class ---
@@ -323,7 +323,7 @@ Your JSON Response:
 
         # --- Call AI Service ---
         # Ensure GITHUB_TOKEN is correctly loaded
-        if not GITHUB_TOKEN or GITHUB_TOKEN == "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": # Check your specific placeholder
+        if not GITHUB_TOKEN or GITHUB_TOKEN == "git-api": # Check your specific placeholder
              print("CRITICAL WARNING: Using a placeholder/fallback AI API Key. Ensure MISTRAL_API_KEY is set.")
              # return Response({'error': 'AI service API Key is not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR) # Optional: block in prod
 
@@ -782,7 +782,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from mistralai.models import SystemMessage, UserMessage
 
-GITHUB_TOKEN="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"
+GITHUB_TOKEN="git-api"
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -804,7 +804,7 @@ class AnalyzeResumeView(APIView):
 
         try:
             logger.debug("Initializing Mistral client.")
-            client = Mistral(api_key="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", server_url="https://models.github.ai/inference")
+            client = Mistral(api_key="git-api", server_url="https://models.github.ai/inference")
             prompt_content = f"""
 Analyze the following resume and return ONLY valid JSON following the structure:
 {{
@@ -1010,7 +1010,7 @@ class ChatView(APIView):
             # --- AI Call ---
             final_reply = "Sorry, the AI service encountered an issue." # Default error reply
             try:
-                token = "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"; endpoint = "https://models.github.ai/inference" ; model_name = "mistral-ai/mistral-small-2503"
+                token = "git-api"; endpoint = "https://models.github.ai/inference" ; model_name = "mistral-ai/mistral-small-2503"
                 if not Mistral or not token or token == "YOUR_FALLBACK_MISTRAL_KEY":
                      raise ConnectionError("AI Service (Mistral) not configured or key missing.")
 
@@ -1455,7 +1455,7 @@ except ImportError:
 
 # --- Environment Variable for API Key ---
 # Load API key securely from environment variable
-GITHUB_TOKEN = os.environ.get("MISTRAL_API_KEY", "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") # <<< Replace hardcoded fallback in production
+GITHUB_TOKEN = os.environ.get("MISTRAL_API_KEY", "git-api") # <<< Replace hardcoded fallback in production
 
 # Using standard logging is generally preferred over print
 logger = logging.getLogger(__name__)
@@ -1611,7 +1611,7 @@ Your Response (JSON Object Only):
 
         # --- Step 3: Call AI Service ---
         # Ensure GITHUB_TOKEN is loaded correctly from environment or replace fallback
-        if not GITHUB_TOKEN or GITHUB_TOKEN == "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": # Check against your specific placeholder/fallback
+        if not GITHUB_TOKEN or GITHUB_TOKEN == "git-api": # Check against your specific placeholder/fallback
             print("CRITICAL WARNING: Using a placeholder/fallback AI API Key. Ensure MISTRAL_API_KEY environment variable is set correctly.")
             # Consider returning an error in production if the key is clearly invalid/missing
             # return Response({'error': 'AI Service API Key is not configured on the server.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1854,7 +1854,7 @@ except ImportError:
 
 
 # --- Environment Variable for API Key ---
-GITHUB_TOKEN = os.environ.get("MISTRAL_API_KEY", "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") # <<< Replace hardcoded fallback in production
+GITHUB_TOKEN = os.environ.get("MISTRAL_API_KEY", "git-api") # <<< Replace hardcoded fallback in production
 
 logger = logging.getLogger(__name__)
 
@@ -2083,7 +2083,7 @@ Your Response (JSON Object Only):
 
         # --- Step 3: Call AI Service ---
         # Ensure GITHUB_TOKEN is loaded correctly
-        if not GITHUB_TOKEN or GITHUB_TOKEN == "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": # Check your specific fallback
+        if not GITHUB_TOKEN or GITHUB_TOKEN == "git-api": # Check your specific fallback
             print("CRITICAL WARNING: Using a placeholder/fallback AI API Key for revision.")
             # Consider returning an error in production
 
