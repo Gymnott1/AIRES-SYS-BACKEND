@@ -11,8 +11,6 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-import os
-import requests
 from .middleware.csp_headers import CSPFrameAllowMiddleware 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -54,9 +52,6 @@ HF_SENTIMENT_MODEL_URL = "https://api-inference.huggingface.co/models/cardiffnlp
 
 # Add a specific setting for the resume classification task
 LOCAL_CLASSIFICATION_MODEL_NAME = "mistral"  # Using mistral for document classification
-
-# --- End LLM Configuration ---
-
 
 
 # Application definition

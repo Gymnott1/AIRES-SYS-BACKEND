@@ -1,5 +1,9 @@
 from django.urls import path
-from .views import ValidateResumeView, UpdateUserRoleView, RecruiterAnalyzeView, ResumePDFView, ResumeDetailView, UploadResumeView, AnalyzeResumeView, ChatView, SignupView, LoginView, LogoutView, account_detail, update_profile, update_password, delete_account, ChatMessagesView, user_conversations 
+from .views import ValidateResumeView, UpdateUserRoleView
+from .views import RecruiterAnalyzeView, ResumePDFView, ResumeDetailView 
+from .views import UploadResumeView, AnalyzeResumeView, ChatView, SignupView, LoginView 
+from .views import LogoutView, account_detail, update_profile, update_password, delete_account 
+from .views import ChatMessagesView, user_conversations 
 from . import views
 
 urlpatterns = [
